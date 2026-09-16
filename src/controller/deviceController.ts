@@ -377,21 +377,24 @@ export async function getChatById(req: Request, res: Response) {
       schema: 'NERDWHATS_AMERICA'
      }
      #swagger.parameters["phone"] = {
-      schema: '5521999999999'
+      schema: '5521999999999@c.us'
      }
      #swagger.parameters["isGroup"] = {
       schema: 'false'
      }
    */
   const { phone } = req.params;
-  const { isGroup } = req.query;
+  const { isGroup = false, isNewsletter = false, isLid = false } = req.query;
 
   try {
     let result = {} as Chat;
-    if (isGroup) {
-      result = await req.client.getChatById(`${phone}@g.us`);
-    } else {
-      result = await req.client.getChatById(`${phone}@c.us`);
+    for (const contato of contactToArray(
+      phone as string,
+      isGroup as boolean,
+      isNewsletter as boolean,
+      isLid as boolean
+    )) {
+      result = await req.client.getChatById(contato);
     }
 
     res.status(200).json(result);
@@ -1003,15 +1006,14 @@ export async function forwardMessages(req: Request, res: Response) {
   const { phone, messageId, isGroup = false } = req.body;
 
   try {
+    const contacts = contactToArray(phone, isGroup);
     let response;
 
-    if (!isGroup) {
-      response = await req.client.forwardMessage(`${phone[0]}`, messageId);
-    } else {
-      response = await req.client.forwardMessage(`${phone[0]}`, messageId);
+    for (const contact of contacts) {
+      response = await req.client.forwardMessagesV2(contact, messageId);
     }
 
-    res.status(201).json({ status: 'success', response: response });
+    res.status(201).json({ status: 'success', response });
   } catch (e) {
     req.logger.error(e);
     res
@@ -1818,7 +1820,7 @@ export async function setRecording(req: Request, res: Response) {
     let response;
     for (const contato of contactToArray(phone, isGroup)) {
       if (value) response = await req.client.startRecording(contato, duration);
-      else response = await req.client.stopRecoring(contato);
+      else response = await req.client.stopRecording(contato);
     }
 
     res.status(200).json({ status: 'success', response: response });
@@ -2252,13 +2254,14 @@ export async function chatWoot(req: Request, res: Response): Promise<any> {
   try {
     if (await client.isConnected()) {
       const event = req.body.event;
+      const is_private = req.body.private || req.body.is_private;
 
       if (
         event == 'conversation_status_changed' ||
         event == 'conversation_resolved' ||
-        req.body.private
+        is_private
       ) {
-        res
+        return res
           .status(200)
           .json({ status: 'success', message: 'Success on receive chatwoot' });
       }
@@ -2270,7 +2273,9 @@ export async function chatWoot(req: Request, res: Response): Promise<any> {
       } = req.body;
 
       if (event != 'message_created' && message_type != 'outgoing')
-        res.status(200);
+        return res
+          .status(200)
+          .json({ status: 'success', message: 'Success on receive chatwoot' });
       for (const contato of contactToArray(phone, false)) {
         if (message_type == 'outgoing') {
           if (message.attachments) {
@@ -2279,12 +2284,23 @@ export async function chatWoot(req: Request, res: Response): Promise<any> {
             }/${message.attachments[0].data_url.substring(
               message.attachments[0].data_url.indexOf('/rails/') + 1
             )}`;
-            await client.sendFile(
-              `${contato}`,
-              base_url,
-              'file',
-              message.content
-            );
+
+            // Check if attachments is Push-to-talk and send this
+            if (message.attachments[0].file_type === 'audio') {
+              await client.sendPtt(
+                `${contato}`,
+                base_url,
+                'Voice Audio',
+                message.content
+              );
+            } else {
+              await client.sendFile(
+                `${contato}`,
+                base_url,
+                'file',
+                message.content
+              );
+            }
           } else {
             await client.sendText(contato, message.content);
           }

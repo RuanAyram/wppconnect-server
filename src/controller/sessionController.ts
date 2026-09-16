@@ -210,11 +210,24 @@ export async function startSession(req: Request, res: Response): Promise<any> {
             properties: {
               webhook: { type: "string" },
               waitQrCode: { type: "boolean" },
+              proxy: {
+                type: "object",
+                properties: {
+                  url: { type: "string" },
+                  username: { type: "string" },
+                  password: { type: "string" },
+                }
+              }
             }
           },
           example: {
             webhook: "",
             waitQrCode: false,
+            proxy: {
+              url: "http://myproxy.com:8080",
+              username: "myuser",
+              password: "mypassword"
+            }
           }
         }
       }
@@ -667,6 +680,52 @@ export async function subscribePresence(req: Request, res: Response) {
     res.status(500).json({
       status: 'error',
       message: 'Error on subscribe presence',
+      error: error,
+    });
+  }
+}
+
+export async function setOnlinePresence(req: Request, res: Response) {
+  /**
+   * #swagger.tags = ["Misc"]
+     #swagger.operationId = 'setOnlinePresence'
+     #swagger.autoBody=false
+     #swagger.security = [{
+            "bearerAuth": []
+     }]
+     #swagger.parameters["session"] = {
+      schema: 'NERDWHATS_AMERICA'
+     }
+     #swagger.requestBody = {
+      required: true,
+      "@content": {
+        "application/json": {
+          schema: {
+            type: "object",
+            properties: {
+              isOnline: { type: "boolean" },
+            }
+          },
+          example: {
+   isOnline: false,
+          }
+        }
+      }
+     }
+   */
+  try {
+    const { isOnline = true } = req.body;
+
+    await req.client.setOnlinePresence(isOnline);
+
+    res.status(200).json({
+      status: 'success',
+      response: { message: 'Set Online Presence Successfully' },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Error on set online presence',
       error: error,
     });
   }
